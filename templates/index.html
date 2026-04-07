@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="theme-color" content="#1565C0">
+  <meta name="description" content="AI-powered marble defect detection using OpenVINO">
+  <title>Marble Vision — Defect Detection</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --blue-900: #0D47A1;
+      --blue-800: #1565C0;
+      --blue-600: #1E88E5;
+      --blue-100: #BBDEFB;
+      --blue-50:  #E3F2FD;
+      --red-800:  #C62828;
+      --red-50:   #FFEBEE;
+      --red-100:  #FFCDD2;
+      --green-800:#2E7D32;
+      --green-50: #E8F5E9;
+      --green-100:#A5D6A7;
+      --gray-50:  #F8FAFC;
+      --gray-100: #F1F5F9;
+      --gray-200: #E2E8F0;
+      --gray-400: #94A3B8;
+      --gray-600: #475569;
+      --gray-800: #1E293B;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--gray-100);
+      color: var(--gray-800);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--blue-800);
+      padding: 0 28px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+    }
+    .topbar-logo {
+      width: 34px; height: 34px;
+      background: #fff;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .topbar-logo svg { width: 18px; height: 18px; }
+    .topbar h1 { color: #fff; font-size: 15px; font-weight: 500; letter-spacing: 0.01em; }
+    .topbar-badge {
+      margin-left: auto;
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Main panel ── */
+    .main-panel {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 8px; }
+    .tab-btn {
+      padding: 8px 22px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--gray-200);
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--gray-600);
+      transition: all 0.15s;
+    }
+    .tab-btn.active { background: var(--blue-800); color: #fff; border-color: var(--blue-800); }
+    .tab-btn:hover:not(.active) { background: var(--blue-50); border-color: var(--blue-100); }
+
+    /* ── Loading bar ── */
+    .loading-bar {
+      height: 3px; border-radius: 2px;
+      background: var(--blue-50); overflow: hidden; display: none;
+    }
+    .loading-bar.active { display: block; }
+    .loading-bar-inner {
+      height: 100%; background: var(--blue-800); border-radius: 2px;
+      animation: load 1.2s ease-in-out infinite;
+    }
+    @keyframes load {
+      0%   { width: 0;   margin-left: 0; }
+      50%  { width: 60%; margin-left: 20%; }
+      100% { width: 0;   margin-left: 100%; }
+    }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 1.5px dashed var(--blue-600);
+      border-radius: var(--radius-lg);
+      background: var(--blue-50);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; 
+      height: 500px; /* Fixed height */
+      width: 100%;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      background: var(--blue-100);
+      border-color: var(--blue-800);
+    }
+    .drop-icon {
+      width: 52px; height: 52px;
+      background: var(--blue-800);
+      border-radius: var(--radius-md);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .drop-icon svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; }
+    .drop-zone p { font-size: 15px; color: var(--blue-800); font-weight: 500; }
+    .drop-zone span { font-size: 12px; color: #5C9BD8; }
+    #fileInput { display: none; }
+
+    /* ── Result image box ── */
+    .result-box {
+      background: #0a0a0a;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; 
+      height: 500px; /* Fixed height */
+      width: 100%;
+    }
+    #resultImage, #camCanvas {
+      max-width: 100%; max-height: 100%;
+      object-fit: contain;
+      transition: transform 0.3s;
+    }
+    #camCanvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .result-box.zoomed { overflow: auto; cursor: grab; }
+    .result-box.zoomed:active { cursor: grabbing; }
+    .result-box.zoomed #resultImage { max-width: none; max-height: none; transform: scale(2); }
+
+    .img-actions {
+      position: absolute; top: 10px; right: 10px;
+      display: none; gap: 6px;
+    }
+    .result-box:hover .img-actions { display: flex; }
+    .img-btn {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: rgba(21,101,192,0.88);
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.15s, background 0.15s;
+    }
+    .img-btn:hover { background: var(--blue-900); transform: scale(1.1); }
+    .img-btn svg { width: 15px; height: 15px; fill: none; stroke: #fff; stroke-width: 2; }
+
+    /* ── Camera view ── */
+    .cam-placeholder {
+      background: #111;
+      border-radius: var(--radius-lg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: #777;
+      height: 500px; /* Fixed height */
+      width: 100%;
+    }
+    .cam-placeholder svg { width: 40px; height: 40px; fill: none; stroke: #555; stroke-width: 1.5; }
+    .cam-placeholder p { font-size: 13px; }
+    .cam-controls { display: flex; gap: 10px; justify-content: center; }
+    .cam-btn {
+      padding: 10px 28px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--gray-200);
+      background: #fff;
+      font-size: 13px; cursor: pointer; color: var(--gray-600);
+      transition: all 0.15s;
+    }
+    .cam-btn.primary { background: var(--blue-800); color: #fff; border-color: var(--blue-800); }
+    .cam-btn.primary:hover { background: var(--blue-900); }
+    .cam-btn:hover:not(.primary) { background: var(--gray-100); }
+
+    /* ── Side panel ── */
+    .side-panel {
+      border-left: 1px solid var(--gray-200);
+      background: #fff;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .side-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--gray-200);
+      font-size: 13px; font-weight: 500;
+      display: flex; align-items: center; gap: 8px;
+      color: var(--gray-800);
+      flex-shrink: 0;
+    }
+    .side-header svg { width: 15px; height: 15px; fill: none; stroke: var(--blue-800); stroke-width: 2; }
+
+    /* ── Stat cards ── */
+    .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px 20px; flex-shrink: 0; }
+    .stat-card { border-radius: var(--radius-md); padding: 14px; text-align: center; }
+    .stat-card.total { background: var(--blue-50); }
+    .stat-card.defect { background: var(--red-50); }
+    .stat-n { font-size: 30px; font-weight: 500; }
+    .stat-card.total .stat-n { color: var(--blue-800); }
+    .stat-card.defect .stat-n { color: var(--red-800); }
+    .stat-l { font-size: 11px; margin-top: 3px; opacity: 0.8; }
+    .stat-card.total .stat-l { color: var(--blue-800); }
+    .stat-card.defect .stat-l { color: var(--red-800); }
+
+    /* ── Detection list ── */
+    .det-list { flex: 1; overflow-y: auto; padding: 0 20px 12px; }
+    .det-item {
+      padding: 10px 12px; border-radius: var(--radius-sm);
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px; border: 1px solid var(--gray-200);
+    }
+    .det-item.ok-item  { background: var(--green-50);  border-color: var(--green-100); }
+    .det-item.bad-item { background: var(--red-50);    border-color: var(--red-100); }
+    .det-name { font-size: 13px; font-weight: 500; }
+    .det-item.ok-item  .det-name { color: var(--green-800); }
+    .det-item.bad-item .det-name { color: var(--red-800); }
+    .det-conf {
+      font-size: 12px; padding: 3px 9px;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.06);
+      color: var(--gray-600);
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: var(--gray-400); padding: 30px;
+    }
+    .empty-state svg { width: 36px; height: 36px; opacity: 0.4; fill: none; stroke: currentColor; stroke-width: 1.5; }
+    .empty-state p { font-size: 13px; }
+
+    /* ── Legend ── */
+    .legend { padding: 14px 20px; border-top: 1px solid var(--gray-200); flex-shrink: 0; }
+    .legend-title { font-size: 11px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+    .legend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .leg-item { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--gray-600); }
+    .leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Tab views ── */
+    .tab-view { 
+      display: none; 
+      flex-direction: column; 
+      gap: 14px; 
+    }
+    .tab-view.active { display: flex; }
+
+    /* ── Responsive design ── */
+    @media (max-width: 900px) {
+      .layout { 
+        grid-template-columns: 1fr; 
+        grid-template-rows: 1fr auto; 
+      }
+      .side-panel { 
+        max-height: 320px; 
+        border-left: none; 
+        border-top: 1px solid var(--gray-200); 
+      }
+      .main-panel { padding: 12px; }
+      .topbar { padding: 0 16px; height: 52px; }
+      .topbar h1 { font-size: 14px; }
+      .stats-row { padding: 12px 16px; }
+      
+      .drop-zone, .result-box, .cam-placeholder { height: 400px; }
+    }
+
+    @media (max-width: 600px) {
+      .topbar { padding: 0 12px; height: 48px; }
+      .topbar h1 { font-size: 13px; }
+      .topbar-logo { width: 28px; height: 28px; }
+      .topbar-logo svg { width: 14px; height: 14px; }
+      .topbar-badge { font-size: 10px; padding: 3px 10px; }
+      
+      .main-panel { padding: 10px; gap: 10px; }
+      .tabs { gap: 6px; }
+      .tab-btn { padding: 7px 16px; font-size: 12px; }
+      
+      .drop-zone { height: 300px; gap: 8px; }
+      .drop-icon { width: 42px; height: 42px; }
+      .drop-icon svg { width: 20px; height: 20px; }
+      .drop-zone p { font-size: 14px; }
+      .drop-zone span { font-size: 11px; }
+      
+      .result-box, .cam-placeholder { height: 300px; }
+      .img-actions { top: 8px; right: 8px; gap: 5px; }
+      .img-btn { width: 30px; height: 30px; }
+      .img-btn svg { width: 13px; height: 13px; }
+      
+      .cam-placeholder { gap: 8px; }
+      .cam-placeholder svg { width: 32px; height: 32px; }
+      .cam-placeholder p { font-size: 12px; }
+      .cam-controls { gap: 8px; flex-wrap: wrap; }
+      .cam-btn { padding: 9px 20px; font-size: 12px; }
+      
+      .side-panel { max-height: 280px; }
+      .side-header { padding: 12px 16px; font-size: 12px; }
+      .stats-row { grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 16px; }
+      .stat-card { padding: 12px; }
+      .stat-n { font-size: 24px; }
+      .stat-l { font-size: 10px; }
+      
+      .det-list { padding: 0 16px 10px; }
+      .det-item { padding: 8px 10px; margin-bottom: 5px; }
+      .det-name { font-size: 12px; }
+      .det-conf { font-size: 11px; padding: 2px 8px; }
+      
+      .legend { padding: 12px 16px; }
+      .legend-title { font-size: 10px; margin-bottom: 8px; }
+      .legend-grid { gap: 6px; }
+      .leg-item { font-size: 11px; gap: 6px; }
+      .leg-dot { width: 8px; height: 8px; }
+      
+      .empty-state { padding: 20px; }
+      .empty-state svg { width: 28px; height: 28px; }
+      .empty-state p { font-size: 12px; }
+    }
+
+    @media (max-width: 400px) {
+      .topbar h1 { display: none; }
+      .stats-row { grid-template-columns: 1fr; }
+      .legend-grid { grid-template-columns: 1fr; }
+      .drop-zone, .result-box, .cam-placeholder { height: 250px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="topbar-logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#1565C0" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg>
+    </div>
+    <h1>Marble Vision — Defect Detection</h1>
+    <div class="topbar-badge">OpenVINO · CPU</div>
+  </div>
+
+  <div class="layout">
+
+    <!-- Main panel -->
+    <div class="main-panel">
+      <div class="tabs">
+        <button class="tab-btn active" id="tabUpload" onclick="switchTab('upload')">Upload image</button>
+        <button class="tab-btn" id="tabCam" onclick="switchTab('cam')">Live camera</button>
+      </div>
+
+      <div class="loading-bar" id="loadBar"><div class="loading-bar-inner"></div></div>
+
+      <!-- Upload view -->
+      <div class="tab-view active" id="viewUpload">
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+          <div class="drop-icon">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <p>Drop marble image here</p>
+          <span>JPG or PNG · Click to browse</span>
+          <input type="file" id="fileInput" accept="image/*" onchange="handleFile(event)">
+        </div>
+
+        <div class="result-box" id="resultBox" style="display:none;">
+          <img id="resultImage" alt="Detection result">
+          <div class="img-actions">
+            <button class="img-btn" onclick="toggleZoom()" id="zoomBtn" title="Zoom">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            </button>
+            <button class="img-btn" onclick="downloadImage()" title="Download">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </button>
+            <button class="img-btn" onclick="resetUpload()" title="Upload new">
+              <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.05"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Camera view -->
+      <div class="tab-view" id="viewCam">
+        <div class="cam-placeholder" id="camPlaceholder">
+          <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          <p>Click Start camera to begin</p>
+        </div>
+        <div class="result-box" id="camResultBox" style="display:none;">
+          <canvas id="camCanvas"></canvas>
+        </div>
+        <div class="cam-controls">
+          <button class="cam-btn primary" id="btnStart" onclick="startCam()">Start camera</button>
+          <button class="cam-btn" id="btnStop" onclick="stopCam()" style="display:none;">Stop camera</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Side panel -->
+    <div class="side-panel">
+      <div class="side-header">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Detection results
+      </div>
+
+      <div class="empty-state" id="emptyState">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        <p>No detections yet</p>
+      </div>
+
+      <div id="resultsContent" style="display:none; flex-direction:column; flex:1; overflow:hidden; min-height:0;">
+        <div class="stats-row">
+          <div class="stat-card total">
+            <div class="stat-n" id="statTotal">0</div>
+            <div class="stat-l">Detections</div>
+          </div>
+          <div class="stat-card defect">
+            <div class="stat-n" id="statDefects">0</div>
+            <div class="stat-l">Defects</div>
+          </div>
+        </div>
+        <div class="det-list" id="detList"></div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-title">Classification</div>
+        <div class="legend-grid">
+          <div class="leg-item"><div class="leg-dot" style="background:#2E7D32;"></div>Normal Surface</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#C62828;"></div>Fracture Defect</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let stream = null;
+    let isStreaming = false;
+    let currentImg = null;
+    let zoomed = false;
+    let isDragging = false, sx, sy, sl, st;
+
+    // Drag/touch pan for zoomed images
+    const rb = document.getElementById('resultBox');
+    
+    // Mouse events
+    rb.addEventListener('mousedown', e => {
+      if (!zoomed) return;
+      isDragging = true; sx = e.pageX; sy = e.pageY; sl = rb.scrollLeft; st = rb.scrollTop;
+      e.preventDefault();
+    });
+    document.addEventListener('mouseup', () => isDragging = false);
+    document.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      rb.scrollLeft = sl - (e.pageX - sx) * 2;
+      rb.scrollTop  = st - (e.pageY - sy) * 2;
+    });
+
+    // Touch events for mobile
+    rb.addEventListener('touchstart', e => {
+      if (!zoomed || e.touches.length !== 1) return;
+      isDragging = true;
+      sx = e.touches[0].pageX;
+      sy = e.touches[0].pageY;
+      sl = rb.scrollLeft;
+      st = rb.scrollTop;
+      e.preventDefault();
+    }, { passive: false });
+    
+    document.addEventListener('touchend', () => isDragging = false);
+    
+    document.addEventListener('touchmove', e => {
+      if (!isDragging || e.touches.length !== 1) return;
+      rb.scrollLeft = sl - (e.touches[0].pageX - sx) * 2;
+      rb.scrollTop  = st - (e.touches[0].pageY - sy) * 2;
+      e.preventDefault();
+    }, { passive: false });
+
+    function switchTab(tab) {
+      document.getElementById('tabUpload').classList.toggle('active', tab === 'upload');
+      document.getElementById('tabCam').classList.toggle('active', tab === 'cam');
+      document.getElementById('viewUpload').classList.toggle('active', tab === 'upload');
+      document.getElementById('viewCam').classList.toggle('active', tab === 'cam');
+      if (tab === 'upload') stopCam();
+    }
+
+    // Drop zone drag
+    const dz = document.getElementById('dropZone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('drag-over');
+      const f = e.dataTransfer.files[0];
+      if (f && f.type.startsWith('image/')) uploadImage(f);
+    });
+
+    function handleFile(e) { if (e.target.files[0]) uploadImage(e.target.files[0]); }
+
+    async function uploadImage(file) {
+      document.getElementById('dropZone').style.display = 'none';
+      document.getElementById('resultBox').style.display = 'none';
+      const lb = document.getElementById('loadBar');
+      lb.classList.add('active');
+
+      const fd = new FormData();
+      fd.append('file', file);
+
+      try {
+        const res = await fetch('/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        currentImg = data.image;
+        document.getElementById('resultImage').src = data.image;
+        document.getElementById('resultBox').style.display = 'flex';
+        showResults(data);
+      } catch (err) {
+        alert('Upload failed: ' + err.message);
+        document.getElementById('dropZone').style.display = 'flex';
+      } finally {
+        lb.classList.remove('active');
+      }
+    }
+
+    function showResults(data) {
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('resultsContent').style.display = 'flex';
+      document.getElementById('statTotal').textContent = data.detections.length;
+      document.getElementById('statDefects').textContent = data.total_defects;
+
+      const list = document.getElementById('detList');
+      list.innerHTML = data.detections.length === 0
+        ? '<p style="font-size:13px;color:#94A3B8;text-align:center;padding:20px 0;">No objects detected</p>'
+        : data.detections.map(d => `
+          <div class="det-item ${d.class_name === 'Normal_Surface' ? 'ok-item' : 'bad-item'}">
+            <span class="det-name">${d.class_name.replace('_', ' ')}</span>
+            <span class="det-conf">${Math.round(d.confidence * 100)}%</span>
+          </div>`).join('');
+    }
+
+    function clearResults() {
+      document.getElementById('emptyState').style.display = 'flex';
+      document.getElementById('resultsContent').style.display = 'none';
+    }
+
+    function resetUpload() {
+      document.getElementById('resultBox').style.display = 'none';
+      document.getElementById('dropZone').style.display = 'flex';
+      document.getElementById('fileInput').value = '';
+      currentImg = null; zoomed = false;
+      rb.classList.remove('zoomed');
+      clearResults();
+    }
+
+    function toggleZoom() {
+      zoomed = !zoomed;
+      rb.classList.toggle('zoomed', zoomed);
+      document.getElementById('zoomBtn').title = zoomed ? 'Zoom out' : 'Zoom in';
+    }
+
+    function downloadImage() {
+      if (!currentImg) return;
+      const a = document.createElement('a');
+      a.href = currentImg;
+      a.download = `marble_detection_${Date.now()}.jpg`;
+      a.click();
+    }
+
+    async function startCam() {
+      try {
+        // Request camera with mobile-friendly constraints
+        const constraints = {
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'environment' // Use back camera on mobile
+          }
+        };
+        
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const vid = document.createElement('video');
+        vid.srcObject = stream; vid.autoplay = true; vid.playsInline = true;
+        await new Promise(r => vid.onloadedmetadata = r);
+
+        document.getElementById('camPlaceholder').style.display = 'none';
+        document.getElementById('camResultBox').style.display = 'flex';
+        document.getElementById('btnStart').style.display = 'none';
+        document.getElementById('btnStop').style.display = 'inline-block';
+
+        isStreaming = true;
+        (async function loop() {
+          if (!isStreaming) return;
+          const cv = document.getElementById('camCanvas');
+          cv.width = vid.videoWidth; cv.height = vid.videoHeight;
+          cv.getContext('2d').drawImage(vid, 0, 0);
+          try {
+            const res = await fetch('/stream_frame', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ frame: cv.toDataURL('image/jpeg', 0.8) })
+            });
+            const data = await res.json();
+            const img = new Image();
+            img.onload = () => cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+            img.src = data.image;
+            showResults(data);
+          } catch {}
+          setTimeout(loop, 500);
+        })();
+      } catch (e) { 
+        alert('Camera error: ' + e.message + '\nPlease allow camera access in your browser settings.'); 
+      }
+    }
+
+    function stopCam() {
+      isStreaming = false;
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      document.getElementById('camPlaceholder').style.display = 'flex';
+      document.getElementById('camResultBox').style.display = 'none';
+      document.getElementById('btnStart').style.display = 'inline-block';
+      document.getElementById('btnStop').style.display = 'none';
+      clearResults();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS Files
+.DS_Store
+Thumbs.db
+*.log
+
+# Model Backups (keep only active model/ directory)
+model_marbles/
+model_marbles2/
+model_meta/
+
+# Datasets and Training Data
+Dataset/
+Dataset.tar.bz2
+Freelance Test Images/
+
+# Test Images and Results
+images/
+images.zip
+test_detection_result.jpg
+
+# Test and Debug Scripts
+test_detection.py
+test_model.py
+debug_inference.py
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.tar.bz2
+
+# Documentation (optional - keep these commented to push docs)
+# MODEL_INFO.md
+# CHANGES.md
+# DETECTION_LOGIC.md
+
+# Temporary Files
+*.tmp
+original_dm.json
+
+# Keep these files for deployment:
+# - model/ (active model)
+# - dm.json (class definitions)
+# - meta.json (model metadata)
+# - app.py (Flask app)
+# - templates/ (HTML files)
+# - requirements.txt (dependencies)
+# - Procfile (deployment config)
+# - vercel.json (Vercel config)
+# - README.md (main docs)
+# - All deployment guides
