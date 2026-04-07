@@ -52,10 +52,9 @@ debug_inference.py
 *.tar.gz
 *.tar.bz2
 
-# Documentation (optional - keep these commented to push docs)
-# MODEL_INFO.md
-# CHANGES.md
-# DETECTION_LOGIC.md
+# Documentation - Ignore all .md files except README.md
+*.md
+!README.md
 
 # Temporary Files
 *.tmp
@@ -70,5 +69,4 @@ original_dm.json
 # - requirements.txt (dependencies)
 # - Procfile (deployment config)
 # - vercel.json (Vercel config)
-# - README.md (main docs)
-# - All deployment guides
+# - README.md (main docs only)
